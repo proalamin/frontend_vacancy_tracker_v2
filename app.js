@@ -227,7 +227,8 @@ function renderUser() {
           <option value="rejected"            ${j.status === 'rejected'            ? 'selected' : ''}>❌ Rejected</option>
         </select>
         ${j.link ? `<a href="${escapeHtml(j.link)}" target="_blank" rel="noopener"><button class="btn btn-accent btn-sm">Apply →</button></a>` : ''}
-        <button class="btn btn-primary btn-sm" onclick="scanCV(${j.id})">CV Scan</button>
+        <button class="btn btn-details btn-sm" onclick="openDetailsModal(${j.id})">📋 Job Details</button>
+        <button class="btn btn-cv btn-sm" onclick="openCvModal(${j.id})">🤖 CV Scanning</button>
       </div>
     </div>
   `).join('');
@@ -240,14 +241,6 @@ function setStatus(id, sel) {
     sel.className = `status-select ${sel.value}`;
     renderUser();
     showToast('Status updated!');
-  }
-}
-
-function scanCV(id) {
-  const j = jobs.find(x => x.id === id);
-  if (j) {
-    showToast('CV scanning feature coming soon!', 'success');
-    // TODO: Implement CV scanning logic here
   }
 }
 
@@ -400,3 +393,143 @@ function switchView(v) {
 
 // ── INIT ──
 loadJobs();
+
+// ── JOB DETAILS MODAL ──
+function openDetailsModal(id) {
+  const j = jobs.find(x => x.id === id);
+  document.getElementById('details-title').textContent    = j.title;
+  document.getElementById('details-company').textContent  = j.company;
+  document.getElementById('details-deadline').textContent = j.deadline || 'Not specified';
+  document.getElementById('details-desc').textContent     = j.desc || 'No description provided.';
+
+  const contacts = document.getElementById('details-contacts');
+  contacts.innerHTML = [
+    j.website  ? `<a href="${escapeHtml(j.website)}"  target="_blank" rel="noopener">🌐 Website</a>`  : '',
+    j.facebook ? `<a href="${escapeHtml(j.facebook)}" target="_blank" rel="noopener">📘 Facebook</a>` : '',
+    j.linkedin ? `<a href="${escapeHtml(j.linkedin)}" target="_blank" rel="noopener">💼 LinkedIn</a>` : '',
+    j.phone    ? `<span>📞 ${escapeHtml(j.phone)}</span>`  : '',
+    j.email    ? `<span>✉️ ${escapeHtml(j.email)}</span>`  : '',
+  ].filter(Boolean).join('');
+
+  const applyBtn = document.getElementById('details-apply-btn');
+  if (j.link) { applyBtn.href = j.link; applyBtn.style.display = 'inline-flex'; }
+  else         { applyBtn.style.display = 'none'; }
+
+  document.getElementById('details-modal').classList.add('open');
+}
+
+function closeDetailsModal() {
+  document.getElementById('details-modal').classList.remove('open');
+}
+
+// ── CV SCANNING MODAL ──
+function openCvModal(id) {
+  const j = jobs.find(x => x.id === id);
+  document.getElementById('cv-job-title').textContent = j.title + ' @ ' + j.company;
+  document.getElementById('cv-result').innerHTML      = '';
+  document.getElementById('cv-file').value            = '';
+  document.getElementById('cv-chosen').textContent    = '';
+  document.getElementById('cv-placeholder').style.display  = 'flex';
+  document.getElementById('cv-chosen-wrap').style.display  = 'none';
+  document.getElementById('cv-modal').dataset.jobId   = id;
+  document.getElementById('cv-modal').classList.add('open');
+}
+
+function closeCvModal() {
+  document.getElementById('cv-modal').classList.remove('open');
+}
+
+function handleCvFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const allowed = ['application/pdf','application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain'];
+  if (!allowed.includes(file.type)) {
+    showToast('Please upload a PDF, Word, or TXT file.', 'error');
+    input.value = '';
+    return;
+  }
+  document.getElementById('cv-chosen').textContent         = '📄 ' + file.name;
+  document.getElementById('cv-placeholder').style.display  = 'none';
+  document.getElementById('cv-chosen-wrap').style.display  = 'flex';
+}
+
+async function scanCv() {
+  const fileInput = document.getElementById('cv-file');
+  const file      = fileInput.files[0];
+  if (!file) { showToast('Please upload your CV first.', 'error'); return; }
+
+  const jobId = document.getElementById('cv-modal').dataset.jobId;
+  const j     = jobs.find(x => x.id == jobId);
+
+  const scanBtn = document.getElementById('cv-scan-btn');
+  scanBtn.disabled    = true;
+  scanBtn.textContent = '⏳ Scanning…';
+
+  const resultBox = document.getElementById('cv-result');
+  resultBox.innerHTML = '<div class="cv-scanning-anim">🔍 Analyzing your CV against the job requirements…</div>';
+
+  try {
+    const text   = await readFileAsText(file);
+    const prompt = `You are an expert HR recruiter and CV analyst.
+
+Job Position: ${j.title}
+Company: ${j.company}
+Job Description:
+${j.desc || 'No description provided.'}
+
+Candidate CV:
+${text.slice(0, 4000)}
+
+Analyze this CV against the job requirements and provide:
+1. **Match Score** (0-100%) with a brief reason
+2. **Strengths** — what matches well (3-5 bullet points)
+3. **Gaps** — what is missing or weak (3-5 bullet points)
+4. **Recommendation** — Should they apply? (Yes / Maybe / No) with 2 sentences of advice
+
+Format your response clearly with these exact headings.`;
+
+    const res  = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    const data  = await res.json();
+    const reply = data.content?.map(c => c.text || '').join('') || 'No response received.';
+    resultBox.innerHTML = formatCvResult(reply);
+  } catch (e) {
+    resultBox.innerHTML = `<div style="color:var(--accent);padding:12px">⚠️ Scan failed: ${e.message}</div>`;
+  } finally {
+    scanBtn.disabled    = false;
+    scanBtn.textContent = '🔍 Scan CV';
+  }
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = e => resolve(e.target.result);
+    reader.onerror = ()  => reject(new Error('Could not read file'));
+    reader.readAsText(file);
+  });
+}
+
+function formatCvResult(text) {
+  let html = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^[-•]\s(.+)/gm, '<li>$1</li>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  return `<div class="cv-result-body"><p>${html}</p></div>`;
+}
+
+// Close details + cv modals on overlay click
+['details-modal', 'cv-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+  });
+});

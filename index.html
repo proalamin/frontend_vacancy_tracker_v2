@@ -142,6 +142,51 @@
   </div>
 </div>
 
+<!-- JOB DETAILS MODAL -->
+<div class="modal-overlay" id="details-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title" id="details-title"></div>
+    <div class="details-meta">
+      <span>🏢 <strong id="details-company"></strong></span>
+      <span>📅 Deadline: <strong id="details-deadline"></strong></span>
+    </div>
+    <div class="details-contacts" id="details-contacts"></div>
+    <div class="form-group" style="margin-top:18px">
+      <label>Job Description</label>
+      <div id="details-desc" class="details-desc-box"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeDetailsModal()">Close</button>
+      <a id="details-apply-btn" href="#" target="_blank" rel="noopener"><button class="btn btn-accent">Apply Now →</button></a>
+    </div>
+  </div>
+</div>
+
+<!-- CV SCANNING MODAL -->
+<div class="modal-overlay" id="cv-modal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-title">🤖 CV Scanning</div>
+    <div class="cv-job-label" id="cv-job-title"></div>
+    <div class="cv-upload-area" onclick="document.getElementById('cv-file').click()">
+      <input type="file" id="cv-file" accept=".pdf,.doc,.docx,.txt" style="display:none" onchange="handleCvFile(this)">
+      <div id="cv-placeholder" class="cv-placeholder">
+        <div style="font-size:36px">📂</div>
+        <div style="font-weight:600;margin-top:8px">Click to upload your CV</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">PDF, Word, or TXT</div>
+      </div>
+      <div id="cv-chosen-wrap" class="cv-chosen-wrap" style="display:none">
+        <span id="cv-chosen"></span>
+        <span style="font-size:12px;color:var(--muted)">Click to change file</span>
+      </div>
+    </div>
+    <div id="cv-result" class="cv-result"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeCvModal()">Close</button>
+      <button class="btn btn-cv-scan" id="cv-scan-btn" onclick="scanCv()">🔍 Scan CV</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="app.js"></script>
